@@ -1,5 +1,7 @@
 #!/bin/bash
 
+echo "hallo"
+
 set -x
 
 if [ "$#" -ne 1 ]; then

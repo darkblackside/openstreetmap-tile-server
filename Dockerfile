@@ -95,12 +95,16 @@ RUN mkdir -p /home/renderer/src \
  && git clone --single-branch --branch v4.23.0 https://github.com/gravitystorm/openstreetmap-carto.git --depth 1 \
  && cd openstreetmap-carto \
  && rm -rf .git \
- && npm install -g carto@0.18.2 \
-COPY simple-osm/* /home/renderer/src/openstreetmap-carto
-RUN ls /home/renderer/src/openstreetmap-carto
+ && npm install -g carto@0.18.2
+ADD ./simple-osm/* /home/renderer/src/openstreetmap-carto/
+WORKDIR /home/renderer/src/openstreetmap-carto/
+RUN wget https://osmdata.openstreetmap.de/download/water-polygons-split-3857.zip \
+ && unzip water-polygons-split-3857.zip
 RUN carto project.mml > mapnik.xml \
  && scripts/get-shapefiles.py \
  && rm /home/renderer/src/openstreetmap-carto/data/*.zip
+
+WORKDIR /
 
 # Configure renderd
 RUN sed -i 's/renderaccount/renderer/g' /usr/local/etc/renderd.conf \
@@ -139,7 +143,6 @@ RUN mkdir -p /home/renderer/src \
 
 # Start running
 COPY run.sh /
-ENTRYPOINT ["/run.sh"]
-CMD []
+ENTRYPOINT ["/run.sh", "run"]
 
 EXPOSE 80 5432
