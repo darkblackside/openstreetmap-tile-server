@@ -12,8 +12,6 @@ RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 # Install dependencies
 RUN apt-get update \
   && apt-get install -y wget gnupg2 lsb-core apt-transport-https ca-certificates curl \
-  && wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - \
-  && echo "deb [ trusted=yes ] https://apt.postgresql.org/pub/repos/apt/ `lsb_release -cs`-pgdg main" | tee /etc/apt/sources.list.d/pgdg.list \
   && wget --quiet -O - https://deb.nodesource.com/setup_10.x | bash - \
   && apt-get update \
   && apt-get install -y nodejs
@@ -59,10 +57,6 @@ RUN apt-get install -y --no-install-recommends \
   node-gyp \
   osmium-tool \
   osmosis \
-  postgis \
-  postgresql-12 \
-  postgresql-contrib-12 \
-  postgresql-server-dev-12 \
   protobuf-c-compiler \
   python3-mapnik \
   python3-lxml \
@@ -78,34 +72,8 @@ RUN apt-get install -y --no-install-recommends \
 && apt-get autoremove --yes \
 && rm -rf /var/lib/{apt,dpkg,cache,log}/
 
-# Set up PostGIS
-RUN wget https://download.osgeo.org/postgis/source/postgis-3.0.0.tar.gz -O postgis.tar.gz \
- && mkdir -p postgis_src \
- && tar -xvzf postgis.tar.gz --strip 1 -C postgis_src \
- && rm postgis.tar.gz \
- && cd postgis_src \
- && ./configure \
- && make -j $(nproc) \
- && make -j $(nproc) install \
- && cd .. && rm -rf postgis_src
-
 # Set up renderer user
 RUN adduser --disabled-password --gecos "" renderer
-
-# Install latest osm2pgsql
-RUN mkdir -p /home/renderer/src \
- && cd /home/renderer/src \
- && git clone -b master https://github.com/openstreetmap/osm2pgsql.git --depth 1 \
- && cd /home/renderer/src/osm2pgsql \
- && rm -rf .git \
- && mkdir build \
- && cd build \
- && cmake .. \
- && make -j $(nproc) \
- && make -j $(nproc) install \
- && mkdir /nodes \
- && chown renderer:renderer /nodes \
- && rm -rf /home/renderer/src/osm2pgsql
 
 # Install mod_tile and renderd
 RUN mkdir -p /home/renderer/src \
@@ -128,7 +96,9 @@ RUN mkdir -p /home/renderer/src \
  && cd openstreetmap-carto \
  && rm -rf .git \
  && npm install -g carto@0.18.2 \
- && carto project.mml > mapnik.xml \
+COPY simple-osm/* /home/renderer/src/openstreetmap-carto
+RUN ls /home/renderer/src/openstreetmap-carto
+RUN carto project.mml > mapnik.xml \
  && scripts/get-shapefiles.py \
  && rm /home/renderer/src/openstreetmap-carto/data/*.zip
 
@@ -150,13 +120,6 @@ COPY leaflet-demo.html /var/www/html/index.html
 RUN ln -sf /dev/stdout /var/log/apache2/access.log \
  && ln -sf /dev/stderr /var/log/apache2/error.log
 
-# Configure PosgtreSQL
-COPY postgresql.custom.conf.tmpl /etc/postgresql/12/main/
-RUN chown -R postgres:postgres /var/lib/postgresql \
- && chown postgres:postgres /etc/postgresql/12/main/postgresql.custom.conf.tmpl \
- && echo "host all all 0.0.0.0/0 md5" >> /etc/postgresql/12/main/pg_hba.conf \
- && echo "host all all ::/0 md5" >> /etc/postgresql/12/main/pg_hba.conf
-
 # Copy update scripts
 COPY openstreetmap-tiles-update-expire /usr/bin/
 RUN chmod +x /usr/bin/openstreetmap-tiles-update-expire \
@@ -176,7 +139,6 @@ RUN mkdir -p /home/renderer/src \
 
 # Start running
 COPY run.sh /
-COPY indexes.sql /
 ENTRYPOINT ["/run.sh"]
 CMD []
 
